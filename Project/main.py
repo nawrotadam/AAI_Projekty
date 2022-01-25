@@ -1,14 +1,9 @@
 import tensorflow as tf
-import os
 import matplotlib.pyplot as plt
 import pathlib
-import shutil
 import keras
 import efficientnet.keras as efn
 from keras_preprocessing.image import ImageDataGenerator
-from pathlib import Path
-from random import shuffle
-from glob import glob
 from tensorflow.python.keras.applications.inception_v3 import InceptionV3
 from keras.applications import vgg16
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization, GlobalAveragePooling2D
@@ -17,32 +12,7 @@ from tensorflow.keras.applications import ResNet50
 from tensorflow.python.keras.models import Sequential
 from keras import optimizers
 
-TRAIN_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/train")
-TEST_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/test")
 DATA_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/data")
-
-
-# create test set if not exist
-def create_test_set():
-    # if files in test directory exists, exit function
-    if os.path.exists(TEST_DATASET_PATH) and os.listdir(TEST_DATASET_PATH):
-        return
-
-    # create test directory if not exist
-    Path(TEST_DATASET_PATH).mkdir(parents=True, exist_ok=True)
-
-    # store file paths in lists
-    men_test_files = glob(str(TRAIN_DATASET_PATH / "men/*"))
-    women_test_files = glob(str(TRAIN_DATASET_PATH / "women/*"))
-    test_files = men_test_files + women_test_files
-
-    # shuffles paths in list several times
-    for i in range(5):
-        shuffle(test_files)
-
-    # copy only 1/5 of the files to test directory
-    for i in range(len(test_files) // 5):
-        shutil.copy(test_files[i], TEST_DATASET_PATH)
 
 
 # split dataset to training and validation data, randomises it also a little
@@ -73,13 +43,13 @@ def inception(_training_data, _validation_data):
     x = tf.keras.layers.Flatten()(last_output)
     x = tf.keras.layers.Dense(1024, activation='relu')(x)
     x = tf.keras.layers.Dropout(0.2)(x)
-    x = BatchNormalization()(x)  # TODO test if it works actually better
+    x = BatchNormalization()(x)
     x = tf.keras.layers.Dense(1, activation='sigmoid')(x)
 
     model = tf.keras.Model(pre_trained_model.input, x)
     model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer='Adam', metrics=['accuracy'])
 
-    return model.fit_generator(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
+    return model.fit(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
 
 
 def vggnet(_training_data, _validation_data):
@@ -99,7 +69,7 @@ def vggnet(_training_data, _validation_data):
 
     model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
 
-    return model.fit_generator(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
+    return model.fit(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
 
 
 def resnet(_training_data, _validation_data):
@@ -129,7 +99,7 @@ def efficientnet(_training_data, _validation_data):
     model_final = Model(inputs=base_model.input, outputs=predictions)
 
     model_final.compile(optimizers.RMSprop(lr=0.0001, decay=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
-    return model_final.fit_generator(_training_data, validation_data=_validation_data, steps_per_epoch=5, epochs=2)
+    return model_final.fit(_training_data, validation_data=_validation_data, steps_per_epoch=5, epochs=2)
 
 
 def plot_results(_history):
@@ -157,7 +127,6 @@ def plot_results(_history):
 if __name__ == "__main__":
     # TODO w ostatecznej wersji zastosowac 10 epok po 100 krokow w kazdym z algorytmow
 
-    # create_test_set()
     training_data, validation_data = read_dataset()
 
     # history = inception(training_data, validation_data)
