@@ -4,14 +4,18 @@ import matplotlib.pyplot as plt
 import pathlib
 import shutil
 import keras
+import efficientnet.keras as efn
 from keras_preprocessing.image import ImageDataGenerator
 from pathlib import Path
 from random import shuffle
 from glob import glob
 from tensorflow.python.keras.applications.inception_v3 import InceptionV3
 from keras.applications import vgg16
-from keras.layers import Dense, Dropout, BatchNormalization, GlobalAveragePooling2D
+from keras.layers import Dense, Dropout, Flatten, BatchNormalization, GlobalAveragePooling2D
 from keras import Model
+from tensorflow.keras.applications import ResNet50
+from tensorflow.python.keras.models import Sequential
+from keras import optimizers
 
 TRAIN_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/train")
 TEST_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/test")
@@ -79,7 +83,7 @@ def inception(_training_data, _validation_data):
 
 
 def vggnet(_training_data, _validation_data):
-    base_model = vgg16.VGG16(input_shape=[32, 32, 3], weights="imagenet", include_top=False)
+    base_model = vgg16.VGG16(input_shape=(150, 150, 3), weights="imagenet", include_top=False)
     x = base_model.output
     x = GlobalAveragePooling2D(name='avg_pool')(x)
     x = Dropout(0.2)(x)
@@ -96,6 +100,36 @@ def vggnet(_training_data, _validation_data):
     model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
 
     return model.fit_generator(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
+
+
+def resnet(_training_data, _validation_data):
+    base_model = ResNet50(input_shape=(150, 150, 3), include_top=False, weights="imagenet")
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    base_model = Sequential()
+    base_model.add(ResNet50(include_top=False, weights='imagenet', pooling='max'))
+    base_model.add(Dense(1, activation='sigmoid'))
+
+    base_model.compile(optimizer=tf.keras.optimizers.SGD(lr=0.0001), loss='binary_crossentropy', metrics=['accuracy'])
+    return base_model.fit(_training_data, validation_data=_validation_data, steps_per_epoch=5, epochs=2)
+
+
+def efficientnet(_training_data, _validation_data):
+    base_model = efn.EfficientNetB0(input_shape=(150, 150, 3), include_top=False, weights='imagenet')
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    x = base_model.output
+    x = Flatten()(x)
+    x = Dense(1024, activation="relu")(x)
+    x = Dropout(0.5)(x)
+
+    predictions = Dense(1, activation="sigmoid")(x)
+    model_final = Model(inputs=base_model.input, outputs=predictions)
+
+    model_final.compile(optimizers.RMSprop(lr=0.0001, decay=1e-6), loss='binary_crossentropy', metrics=['accuracy'])
+    return model_final.fit_generator(_training_data, validation_data=_validation_data, steps_per_epoch=5, epochs=2)
 
 
 def plot_results(_history):
@@ -121,11 +155,19 @@ def plot_results(_history):
 
 
 if __name__ == "__main__":
+    # TODO w ostatecznej wersji zastosowac 10 epok po 100 krokow w kazdym z algorytmow
+
     # create_test_set()
     training_data, validation_data = read_dataset()
 
-    history = inception(training_data, validation_data)
-    plot_results(history)
+    # history = inception(training_data, validation_data)
+    # plot_results(history)
 
-    history = vggnet(training_data, validation_data)
+    # history = vggnet(training_data, validation_data)
+    # plot_results(history)
+
+    # history = resnet(training_data, validation_data)
+    # plot_results(history)
+
+    history = efficientnet(training_data, validation_data)
     plot_results(history)
