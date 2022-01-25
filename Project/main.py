@@ -3,12 +3,15 @@ import os
 import matplotlib.pyplot as plt
 import pathlib
 import shutil
+import keras
 from keras_preprocessing.image import ImageDataGenerator
 from pathlib import Path
 from random import shuffle
 from glob import glob
-from keras.layers import BatchNormalization
 from tensorflow.python.keras.applications.inception_v3 import InceptionV3
+from keras.applications import vgg16
+from keras.layers import Dense, Dropout, BatchNormalization, GlobalAveragePooling2D
+from keras import Model
 
 TRAIN_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/train")
 TEST_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/test")
@@ -40,32 +43,19 @@ def create_test_set():
 
 # split dataset to training and validation data, randomises it also a little
 def read_dataset():
-    data_gen = ImageDataGenerator(rescale=1. / 255,
-                                  width_shift_range=0.2,
-                                  validation_split=0.1,
-                                  height_shift_range=0.2,
-                                  shear_range=0.2,
-                                  horizontal_flip=True,
-                                  vertical_flip=True,
-                                  zoom_range=0.2)
+    data_gen = ImageDataGenerator(rescale=1. / 255, width_shift_range=0.2, validation_split=0.1, height_shift_range=0.2,
+                                  shear_range=0.2, horizontal_flip=True, vertical_flip=True, zoom_range=0.2)
 
-    _training_data = data_gen.flow_from_directory(DATA_DATASET_PATH,
-                                                  target_size=(150, 150),
-                                                  class_mode='binary',
-                                                  batch_size=32,
-                                                  subset='training'
-                                                  )
+    _training_data = data_gen.flow_from_directory(DATA_DATASET_PATH, target_size=(150, 150), class_mode='binary',
+                                                  batch_size=32, subset='training')
 
-    _validation_data = data_gen.flow_from_directory(DATA_DATASET_PATH,
-                                                    target_size=(150, 150),
-                                                    class_mode='binary',
-                                                    batch_size=32,
-                                                    subset='validation')
+    _validation_data = data_gen.flow_from_directory(DATA_DATASET_PATH, target_size=(150, 150), class_mode='binary',
+                                                    batch_size=32, subset='validation')
 
     return _training_data, _validation_data
 
 
-def inception():
+def inception(_training_data, _validation_data):
     pre_trained_model = InceptionV3(include_top=False, input_shape=(150, 150, 3), weights='imagenet')
 
     # turn off learning for pre-trained model
@@ -85,14 +75,34 @@ def inception():
     model = tf.keras.Model(pre_trained_model.input, x)
     model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer='Adam', metrics=['accuracy'])
 
-    return model.fit_generator(training_data, epochs=2, steps_per_epoch=5, validation_data=validation_data)
+    return model.fit_generator(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
 
 
-def plot_results(history):
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
-    loss = history.history['loss']
-    val_loss = history.history['val_loss']
+def vggnet(_training_data, _validation_data):
+    base_model = vgg16.VGG16(input_shape=[32, 32, 3], weights="imagenet", include_top=False)
+    x = base_model.output
+    x = GlobalAveragePooling2D(name='avg_pool')(x)
+    x = Dropout(0.2)(x)
+    x = BatchNormalization()(x)
+    x = Dense(2096, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001))(x)
+    x = Dense(2096, use_bias=False, kernel_regularizer=keras.regularizers.l2(0.001))(x)
+    x = Dropout(0.2)(x)
+    predictions = Dense(1, activation='softmax')(x)
+
+    model = Model(inputs=base_model.input, outputs=predictions)
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
+
+    return model.fit_generator(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
+
+
+def plot_results(_history):
+    acc = _history.history['accuracy']
+    val_acc = _history.history['val_accuracy']
+    loss = _history.history['loss']
+    val_loss = _history.history['val_loss']
     epochs = range(len(acc))
 
     plt.plot(epochs, acc, 'r', label='Training accuracy')
@@ -114,5 +124,8 @@ if __name__ == "__main__":
     # create_test_set()
     training_data, validation_data = read_dataset()
 
-    history = inception()
+    history = inception(training_data, validation_data)
+    plot_results(history)
+
+    history = vggnet(training_data, validation_data)
     plot_results(history)
