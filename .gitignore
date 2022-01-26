@@ -150,3 +150,19 @@ fabric.properties
 
 
 Project/datasets
+
+Labs/Lab4/cats_and_dogs_filtered
+Labs/Lab4/example
+
+Labs/Lab6/example_dataset
+Labs/Lab6/tmp
+Labs/Lab6/kaggle_dataset.zip
+
+Labs/Lab7/glove_100_3_polish.txt
+Labs/Lab7/S10_question_answer_pairs.txt
+
+Labs/Lab8/AskUbuntuCorpus.json
+
+Labs/Lab9/WebApplicationsCorpus.json
+
+Labs/sandbox.py
