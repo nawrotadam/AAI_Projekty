@@ -1,8 +1,11 @@
 import tensorflow as tf
+import numpy as np
 import matplotlib.pyplot as plt
 import pathlib
 import keras
 import efficientnet.keras as efn
+from keras.callbacks import Callback
+from sklearn.metrics import classification_report
 from keras_preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.applications.inception_v3 import InceptionV3
 from keras.applications import vgg16
@@ -13,6 +16,25 @@ from tensorflow.python.keras.models import Sequential
 from keras import optimizers
 
 DATA_DATASET_PATH = pathlib.Path("../Project/datasets/boy_or_girl/data")
+
+
+class DataCallback(Callback):
+    def __init__(self, validation_generator, model):
+        super(DataCallback, self).__init__()
+        self.validation_generator = validation_generator
+        self.model = model
+
+    def on_epoch_begin(self, epoch, logs=None):
+        validation_steps_per_epoch = np.math.ceil(self.validation_generator.samples / self.validation_generator.batch_size)
+
+        predictions = self.model.predict_generator(self.validation_generator, steps=validation_steps_per_epoch)
+        predicted_classes = np.argmax(predictions, axis=1)
+
+        true_classes = self.validation_generator.classes
+        class_labels = list(self.validation_generator.class_indices.keys())
+
+        report = classification_report(true_classes, predicted_classes, target_names=class_labels)
+        print(report)
 
 
 # split dataset to training and validation data, randomises it also a little
@@ -49,7 +71,8 @@ def inception(_training_data, _validation_data):
     model = tf.keras.Model(pre_trained_model.input, x)
     model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer='Adam', metrics=['accuracy'])
 
-    return model.fit(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data)
+    return model.fit(_training_data, epochs=2, steps_per_epoch=5, validation_data=_validation_data,
+                     callbacks=[DataCallback(_validation_data, model)])
 
 
 def vggnet(_training_data, _validation_data):
@@ -129,8 +152,8 @@ if __name__ == "__main__":
 
     training_data, validation_data = read_dataset()
 
-    # history = inception(training_data, validation_data)
-    # plot_results(history)
+    history = inception(training_data, validation_data)
+    plot_results(history)
 
     # history = vggnet(training_data, validation_data)
     # plot_results(history)
@@ -138,5 +161,5 @@ if __name__ == "__main__":
     # history = resnet(training_data, validation_data)
     # plot_results(history)
 
-    history = efficientnet(training_data, validation_data)
-    plot_results(history)
+    # history = efficientnet(training_data, validation_data)
+    # plot_results(history)
